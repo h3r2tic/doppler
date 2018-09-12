@@ -1,0 +1,42 @@
+alpha = { 'a'..'z' | 'A'..'Z' | "_" }
+digit = { '0'..'9' }
+
+main = { soi ~ stmt* ~ eoi }
+
+stmt = { var_stmt | let_stmt | loop_stmt | for_stmt | expr_stmt | assign_stmt }
+
+let_stmt = { "let" ~ ident ~ "=" ~ expr ~ ";" }
+var_stmt = { "let" ~ "mut" ~ ident ~ "=" ~ expr ~ ";" }
+assign_stmt = { ident ~ "=" ~ expr ~ ";" }
+expr_stmt = { expr ~ ";" }
+loop_stmt = { "loop" ~ block_expr }
+for_stmt = { "for" ~ name ~ "in" ~ integer ~ ".." ~ integer ~ block_expr }
+
+ident = { name | builtin }
+
+call_expr = { name ~ "(" ~ arg_list? ~ ")" }
+
+arg_list = { expr ~ ("," ~ expr)* }
+
+block_expr = { "{" ~ stmt* ~ "}" }
+
+expr = { factor ~ add_expr* }
+add_expr = { ("+" | "-") ~ factor }
+factor = { primary ~ mul_expr* }
+mul_expr = { ("*" | "/" | "%") ~ primary }
+primary = {
+	"(" ~ expr ~ ")"
+|	integer
+|	call_expr
+|	ident
+|	"-" ~ primary
+}
+
+name = @{ alpha ~ (alpha | digit)* }
+builtin = @{ "@" ~ name }
+integer = @{ ("+" | "-")? ~ int }
+int = @{ digit ~ (digit | "_")* }
+
+newline = _{ "\n" | "\r\n" }
+whitespace = _{ " " | "\t" | "\r" | "\n" }
+comment = _{ "//" ~ (!newline ~ any)* }

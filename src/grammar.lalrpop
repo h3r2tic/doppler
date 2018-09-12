@@ -1,0 +1,103 @@
+use std::str::FromStr;
+use ast::{Expr, Stmt, Opcode, Name, Ident, Builtin};
+
+grammar;
+
+pub Main: Vec<Box<Stmt>> = {
+	<Stmt+>
+}
+
+Tier<Op,NextTier>: Box<Expr> = {
+    Tier<Op,NextTier> Op NextTier => Box::new(Expr::Op(<>)),
+    NextTier
+};
+
+pub Stmt = {
+	AssignStmt,
+	ExprStmt,
+	VarStmt,
+	LetStmt,
+	BlockStmt,
+	LoopStmt,
+	ForStmt,
+}
+
+pub BlockStmt: Box<Stmt> = {
+	"{" <Stmt+> "}" => Box::new(Stmt::Block(<>))
+}
+
+pub LoopStmt: Box<Stmt> = {
+	"loop" <Stmt> => Box::new(Stmt::Loop(<>))
+}
+
+pub ForStmt: Box<Stmt> = {
+	"for" <Ident> "in" <Num> ".." <Num> <Stmt> => Box::new(Stmt::For(<>))
+}
+
+pub LetStmt: Box<Stmt> = {
+	"let" <Ident> "=" <Expr> ";" => Box::new(Stmt::Let(<>))
+}
+
+pub VarStmt: Box<Stmt> = {
+	"let" "mut" <Ident> "=" <Expr> ";" => Box::new(Stmt::Var(<>))
+}
+
+pub AssignStmt: Box<Stmt> = {
+	<Name> "=" <Expr> ";" => Box::new(Stmt::Assign(<>))
+}
+
+pub ExprStmt: Box<Stmt> = {
+	<Expr> ";" => Box::new(Stmt::Expr(<>))
+}
+
+pub Expr = Tier<ExprOp, Factor>;
+Factor = Tier<FactorOp, Term>;
+
+ExprOp: Opcode = { // (3)
+    "+" => Opcode::Add,
+    "-" => Opcode::Sub,
+};
+
+FactorOp: Opcode = {
+    "*" => Opcode::Mul,
+    "/" => Opcode::Div,
+	"%" => Opcode::Mod,
+};
+
+Term: Box<Expr> = {
+	<Ident> "(" <ExprList> ")" => Box::new(Expr::Call(<>)),
+	"-" <Term> => Box::new(Expr::Neg(<>)),
+    Num => Box::new(Expr::Number(<>)),
+	Name => Box::new(Expr::Name(<>)),
+    "(" <Expr> ")"
+};
+
+Num: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap()
+};
+
+Name: Name = {
+	<Ident> => Name::Ident(<>),
+	<Builtin> => Name::Builtin(<>),
+}
+
+Ident: Ident = {
+	r"[a-zA-Z_][a-zA-Z_0-9]*" => Ident(<>.to_string())
+}
+
+Builtin: Builtin = {
+	r"@[a-zA-Z_][a-zA-Z_0-9]*" => Builtin(<>.to_string())
+}
+
+pub ExprList = Comma<Expr>;
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
