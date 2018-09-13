@@ -22,11 +22,11 @@ pub Stmt = {
 }
 
 pub LoopStmt: Box<Stmt> = {
-	"loop" <Stmt> => Box::new(Stmt::Loop(<>))
+	"loop" <BlockExpr> => Box::new(Stmt::Loop(<>))
 }
 
 pub ForStmt: Box<Stmt> = {
-	"for" <Ident> "in" <Num> ".." <Num> <Stmt> => Box::new(Stmt::For(<>))
+	"for" <Ident> "in" <Num> ".." <Num> <BlockExpr> => Box::new(Stmt::For(<>))
 }
 
 pub LetStmt: Box<Stmt> = {

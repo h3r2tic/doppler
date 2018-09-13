@@ -1,10 +1,13 @@
+#[derive(Clone, Debug)]
 pub enum Arg {
     Temp(i32),
-    Reg(i32),
+    Builtin(String),
     Stack(i32),
-    None
+    Const(i32),
+    None,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum Op {
     Add,
     Sub,
@@ -14,15 +17,17 @@ pub enum Op {
     Mov,
 }
 
+#[derive(Clone, Debug)]
 pub struct Instr {
-    op: Op,
-    args: (Arg, Arg),
-    res: Arg,
+    pub op: Op,
+    pub args: (Arg, Arg),
 }
 
+#[derive(Clone, Debug)]
 pub enum Item {
     New(i32),
     Drop(i32),
     Label(i32),
     Instr(Instr),
+    Store(Arg),
 }

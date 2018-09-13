@@ -4,18 +4,19 @@ lalrpop_mod!(pub grammar); // synthesized by LALRPOP
 extern crate regex;
 
 mod ast;
-mod il;
+mod ast_to_il;
 mod const_fold;
+mod il;
 
-use const_fold::{const_fold_program};
+use ast_to_il::ast_to_il;
+use const_fold::const_fold_program;
 
 use regex::Regex;
 use std::fs::File;
 use std::io::prelude::*;
 
-
 fn main() {
-    let mut f = File::open("test/simple3.dr").expect("file not found");
+    let mut f = File::open("test/simple4.dr").expect("file not found");
 
     let mut contents = String::new();
     f.read_to_string(&mut contents)
@@ -29,7 +30,11 @@ fn main() {
 
     let mut ast = grammar::MainParser::new().parse(&contents).unwrap();
     //println!("{:?}", ast);
-	const_fold_program(&mut ast);
+    const_fold_program(&mut ast);
     //println!("\nconst folded:\n");
-    println!("{:?}", ast);
+    println!("ast: {:?}", ast);
+    println!("\n");
+
+    let il = ast_to_il(&ast);
+    println!("il: {:?}", il);
 }
