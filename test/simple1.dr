@@ -1,3 +1,35 @@
-let x = 2 + 2 * 2;
-let y = x * 5;
+let c = 2;
+let x = c * @gx;
+let y = 1 + x * 5;
 @gp = y;
+
+// a:x
+// b:t
+// @gp = 1 + a * b
+// ----
+// a:r0
+// b:r1
+// # = r0 * r1
+// drop r0
+// drop r1
+// new r2
+// r2 = #
+// # = 1 + r2
+// drop r2
+// @gp = #
+// ----
+// a:x
+// b:t
+// # = x * t
+// drop x
+// drop t
+// new x
+// x = #
+// # = 1 + x
+// drop x
+// @gp = #
+// ----
+// a:x
+// b:t
+// x = x * t
+// @gp = 1 + x

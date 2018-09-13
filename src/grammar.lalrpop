@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use ast::{Expr, Stmt, Opcode, Name, Ident, Builtin};
+use ast::{Expr, Stmt, Opcode, Name, Ident, Builtin, Value};
 
 grammar;
 
@@ -17,13 +17,8 @@ pub Stmt = {
 	ExprStmt,
 	VarStmt,
 	LetStmt,
-	BlockStmt,
 	LoopStmt,
 	ForStmt,
-}
-
-pub BlockStmt: Box<Stmt> = {
-	"{" <Stmt+> "}" => Box::new(Stmt::Block(<>))
 }
 
 pub LoopStmt: Box<Stmt> = {
@@ -65,12 +60,26 @@ FactorOp: Opcode = {
 };
 
 Term: Box<Expr> = {
+	IfExpr,
 	<Ident> "(" <ExprList> ")" => Box::new(Expr::Call(<>)),
 	"-" <Term> => Box::new(Expr::Neg(<>)),
-    Num => Box::new(Expr::Number(<>)),
+    Num => Box::new(Expr::Value(Value::Int(<>))),
 	Name => Box::new(Expr::Name(<>)),
-    "(" <Expr> ")"
+    "(" <Expr> ")",
+	BlockExpr,
 };
+
+IfExpr: Box<Expr> = {
+	"if" <Expr> <BlockExpr> <ElseClause?> => Box::new(Expr::If(<>))
+}
+
+ElseClause: Box<Expr> = {
+	"else" <BlockExpr>
+}
+
+BlockExpr: Box<Expr> = {
+	"{" <Stmt*> <Expr?> "}" => Box::new(Expr::Block(<>))
+}
 
 Num: i32 = {
     r"[0-9]+" => i32::from_str(<>).unwrap()

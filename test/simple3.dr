@@ -1,0 +1,19 @@
+let x = if 0 {
+    123
+} else {
+    234
+};
+
+let y = if 0 {
+    1
+} else {
+    if 1 { if 0 {} else { 2 } }
+};
+
+let z = if { @gp = 1; 1 } {
+    123
+} else {
+    666
+};
+
+let w = z * z;
