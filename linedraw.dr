@@ -1,0 +1,19 @@
+let mut line_seed = 0;
+
+// mainloop
+loop {
+	@gp = 300;
+	line_seed = (line_seed + 33) % 99;
+	@gx = (20 * line_seed) / 99 + 20;
+	@gy = (40 * line_seed) / 99 + 40;
+
+	// genpixels
+	for _ in 0..5 {
+		let s = rand(0, 98);
+		let x = s * 5 / 99;
+		let y = s * -10 / 99 + 9;
+		@gp = 100 + 10 * x + y;
+	}
+
+	wait();
+}
