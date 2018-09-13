@@ -3,8 +3,8 @@ pub enum Stmt {
     Expr(Box<Expr>),
     Let(Ident, Box<Expr>),
     Var(Ident, Box<Expr>),
-    Loop(Box<Stmt>),
-    For(Ident, i32, i32, Box<Stmt>),
+    Loop(Box<Expr>),
+    For(Ident, i32, i32, Box<Expr>),
     Assign(Name, Box<Expr>),
 }
 

@@ -1,26 +1,23 @@
-pub enum Operand {
+pub enum Arg {
     Temp(i32),
     Reg(i32),
     Stack(i32),
+    None
 }
 
-pub enum BinaryOp {
+pub enum Op {
     Add,
     Sub,
     Mul,
     Div,
     Mod,
+    Mov,
 }
 
-pub struct BinaryInstr {
-    lhs: Operand,
-    rhs: Operand,
-    result: Operand,
-    op: BinaryOp,
-}
-
-pub enum Instr {
-    BinaryInstr(BinaryInstr),
+pub struct Instr {
+    op: Op,
+    args: (Arg, Arg),
+    res: Arg,
 }
 
 pub enum Item {
