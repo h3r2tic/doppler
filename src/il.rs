@@ -1,10 +1,24 @@
+use std::fmt;
+
 #[derive(Clone, Debug)]
 pub enum Arg {
     Temp(i32),
     Builtin(String),
-    Stack(i32),
+    //Stack(i32),
     Const(i32),
     None,
+}
+
+impl fmt::Display for Arg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Arg::Temp(i) => write!(f, "t{}", i),
+            Arg::Builtin(s) => write!(f, "@{}", s),
+            //Arg::Stack(i) => write!(f, "f{}", i),
+            Arg::Const(i) => write!(f, "{}", i),
+            Arg::None => f.write_str(""),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -14,20 +28,56 @@ pub enum Op {
     Mul,
     Div,
     Mod,
-    Mov,
+    Copy,
+}
+
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Op::Add => "add",
+            Op::Sub => "sub",
+            Op::Mul => "mul",
+            Op::Div => "div",
+            Op::Mod => "mod",
+            Op::Copy => "copy",
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Instr {
     pub op: Op,
     pub args: (Arg, Arg),
+    pub res: Arg,
+}
+
+impl fmt::Display for Instr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} = {} {} {}",
+            self.res, self.op, self.args.0, self.args.1
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum Item {
-    New(i32),
-    Drop(i32),
     Label(i32),
+    Jump(i32),
+    Fjmp(Arg, i32),
+    Tjmp(Arg, i32),
     Instr(Instr),
-    Store(Arg),
+}
+
+impl fmt::Display for Item {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Item::Label(i) => write!(f, "label{}:", i),
+            Item::Jump(i) => write!(f, "jump label{}", i),
+            Item::Fjmp(arg, i) => write!(f, "fjmp({}) label{}", arg, i),
+            Item::Tjmp(arg, i) => write!(f, "tjmp({}) label{}", arg, i),
+            Item::Instr(i) => write!(f, "{}", i),
+        }
+    }
 }

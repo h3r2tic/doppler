@@ -1,0 +1,10 @@
+let mut a = 1;
+let mut whatever = 3;
+let b = if a {
+	whatever = 666;
+	2
+} else {
+	whatever = 1024;
+	3
+};
+let c = b * 2;

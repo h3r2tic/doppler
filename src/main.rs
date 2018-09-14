@@ -16,7 +16,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 fn main() {
-    let mut f = File::open("test/simple4.dr").expect("file not found");
+    let mut f = File::open("test/simple5.dr").expect("file not found");
 
     let mut contents = String::new();
     f.read_to_string(&mut contents)
@@ -33,8 +33,10 @@ fn main() {
     const_fold_program(&mut ast);
     //println!("\nconst folded:\n");
     println!("ast: {:?}", ast);
-    println!("\n");
+    println!("\nil:");
 
     let il = ast_to_il(&ast);
-    println!("il: {:?}", il);
+    for item in il.iter() {
+        println!("{}", item);
+    }
 }
