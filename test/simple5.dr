@@ -8,3 +8,7 @@ let b = if a {
 	3
 };
 let c = b * 2;
+
+loop {
+	@gp = c;
+}

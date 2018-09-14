@@ -42,7 +42,7 @@ pub AssignStmt: Box<Stmt> = {
 }
 
 pub ExprStmt: Box<Stmt> = {
-	<Expr> ";" => Box::new(Stmt::Expr(<>))
+	<Expr> ";" => Box::new(Stmt::Expr(<>)),
 }
 
 pub Expr = Tier<ExprOp, Factor>;
@@ -95,7 +95,7 @@ Ident: Ident = {
 }
 
 Builtin: Builtin = {
-	r"@[a-zA-Z_][a-zA-Z_0-9]*" => Builtin(<>.to_string())
+	"@" <r"[a-zA-Z_][a-zA-Z_0-9]*"> => Builtin(<>.to_string())
 }
 
 pub ExprList = Comma<Expr>;

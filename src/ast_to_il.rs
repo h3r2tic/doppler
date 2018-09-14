@@ -130,8 +130,10 @@ impl Translator {
                 self.lower_let(ident, expr, scope);
             }
             ast::Stmt::Loop(expr) => {
-                // TODO
+                let label = self.alloc_label();
+                self.emit(il::Item::Label(label));
                 self.lower_expr(expr, scope);
+                self.emit(il::Item::Jump(label));
             }
             ast::Stmt::For(_ident, _from, _to, expr) => {
                 // TODO
@@ -265,7 +267,9 @@ impl Translator {
                 }
                 ast::Name::Builtin(reg) => Some(il::Arg::Builtin(reg.0.clone())),
             },
-            ast::Expr::Call(_ident, _args) => None, // TODO
+            ast::Expr::Call(_ident, _args) => {
+				Some(il::Arg::Builtin("TODO:call".to_string()))
+			},
             ast::Expr::Op(lhs, op, rhs) => {
                 let lhs = self.lower_expr(lhs, scope).unwrap();
                 let rhs = self.lower_expr(rhs, scope).unwrap();
