@@ -61,6 +61,14 @@ impl Translator {
         TempVar(res)
     }
 
+    fn emit_instr_with_temp_store<'a>(&mut self, instr: il::Instr, scope: &mut Scope<'a>) -> TempVar {
+        let tmp =self.alloc_temp().0;
+        self.emit(il::Item::New(tmp));
+        self.emit_instr(instr);
+        self.emit(il::Item::Store(il::Arg::Temp(tmp)));
+        TempVar(tmp)
+    }
+
     fn lower_stmt_list<'a>(&mut self, list: &Vec<Box<ast::Stmt>>, scope: &mut Scope<'a>) {
         for stmt in list.iter() {
             self.lower_stmt(&*stmt, scope);
@@ -72,15 +80,12 @@ impl Translator {
         if let il::Arg::Temp(idx) = var {
             scope.put(&ident.0, TempVar(idx));
         } else {
-            let tmp = self.alloc_temp();
-            scope.put(&ident.0, tmp);
-
-            self.emit_instr(il::Instr {
+            let res = self.emit_instr_with_temp_store(il::Instr {
                 op: il::Op::Mov,
                 args: (var, il::Arg::None),
-            });
+            }, scope);
 
-            self.emit(il::Item::Store(il::Arg::Temp(tmp.0)));
+            scope.put(&ident.0, res);
         }
     }
 
@@ -154,7 +159,7 @@ impl Translator {
                 let lhs = self.lower_expr(lhs, scope).unwrap();
                 let rhs = self.lower_expr(rhs, scope).unwrap();
 
-                self.emit_instr(il::Instr {
+                let res = self.emit_instr_with_temp_store(il::Instr {
                     op: match op {
                         ast::Opcode::Mul => il::Op::Mul,
                         ast::Opcode::Div => il::Op::Div,
@@ -163,20 +168,21 @@ impl Translator {
                         ast::Opcode::Sub => il::Op::Sub,
                     },
                     args: (lhs, rhs),
-                });
+                }, scope);
 
-                let res = il::Arg::Temp(self.alloc_temp().0);
-                self.emit(il::Item::Store(res.clone()));
-                Some(res)
+                Some(il::Arg::Temp(res.0))
             }
             ast::Expr::Neg(expr) => {
                 let val = self.lower_expr(expr, scope).unwrap();
+
+                let tmp =self.alloc_temp().0;
+                self.emit(il::Item::New(tmp));
 
                 self.emit_instr(il::Instr {
                     op: il::Op::Sub,
                     args: (il::Arg::Const(0), val),
                 });
-                let res = il::Arg::Temp(self.alloc_temp().0);
+                let res = il::Arg::Temp(tmp);
                 self.emit(il::Item::Store(res.clone()));
                 Some(res)
             }
