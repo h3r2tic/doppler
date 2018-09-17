@@ -62,11 +62,26 @@ impl fmt::Display for Instr {
 }
 
 #[derive(Clone, Debug)]
+pub enum JumpTarget {
+    Block(i32),
+    Label(i32),
+}
+
+impl fmt::Display for JumpTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JumpTarget::Label(i) => write!(f, "label{}", i),
+            JumpTarget::Block(i) => write!(f, "block{}", i),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Item {
     Label(i32),
-    Jump(i32),
-    Fjmp(Arg, i32),
-    Tjmp(Arg, i32),
+    Jump(JumpTarget),
+    Fjmp(Arg, JumpTarget),
+    Tjmp(Arg, JumpTarget),
     Instr(Instr),
 }
 
@@ -74,7 +89,7 @@ impl fmt::Display for Item {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Item::Label(i) => write!(f, "label{}:", i),
-            Item::Jump(i) => write!(f, "jump label{}", i),
+            Item::Jump(i) => write!(f, "jump {}", i),
             Item::Fjmp(arg, i) => write!(f, "fjmp({}) label{}", arg, i),
             Item::Tjmp(arg, i) => write!(f, "tjmp({}) label{}", arg, i),
             Item::Instr(i) => write!(f, "{}", i),

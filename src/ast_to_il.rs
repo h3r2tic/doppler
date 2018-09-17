@@ -6,7 +6,7 @@ use std::collections::HashMap;
 #[derive(Copy, Clone)]
 struct TempVar(i32);
 
-struct Scope(pub Vec<HashMap<String, TempVar>>);
+/*struct Scope(pub Vec<HashMap<String, TempVar>>);
 
 impl Scope {
     fn new() -> Scope {
@@ -35,25 +35,34 @@ impl Scope {
         let first = self.0.len() - 1;
         self.0[first].insert(name.to_string(), val);
     }
-
-    /*fn update(&mut self, name: &str, new_val: TempVar) {
-        for slots in self.0.iter_mut().rev() {
-            if slots.contains_key(name) {
-                slots.insert(name.to_string(), new_val);
-            }
-        }
-    }*/
-}
+}*/
 
 pub fn ast_to_il(ast: &Vec<Box<ast::Stmt>>) -> Vec<il::Item> {
     let mut xlat = Translator::new();
 
-    xlat.lower_stmt_list(ast, &mut Scope::new());
-    xlat.il
+    xlat.lower_stmt_list(ast, 0);
+    //xlat.il
+
+    for (i, block) in xlat.blocks.iter().enumerate() {
+        println!("block{}", i);
+        for item in block.il.iter() {
+            println!("{}", item);
+        }
+    }
+
+    // TODO
+    vec![]
+}
+
+#[derive(Default)]
+struct Block {
+    pub il: Vec<il::Item>,
+    pub pred: Vec<usize>,
+    pub succ: Vec<usize>,
 }
 
 struct Translator {
-    pub il: Vec<il::Item>,
+    pub blocks: Vec<Block>,
     pub next_temp: i32,
     pub next_label: i32,
 }
@@ -61,18 +70,26 @@ struct Translator {
 impl Translator {
     fn new() -> Translator {
         Translator {
-            il: vec![],
+            blocks: vec![Block::default()],
             next_temp: 0,
             next_label: 0,
         }
     }
 
-    fn emit(&mut self, item: il::Item) {
-        self.il.push(item);
+    fn alloc_block(&mut self, pred: usize) -> usize {
+        let ret = self.blocks.len();
+        self.blocks.push(Block::default());
+        self.blocks[pred].succ.push(ret);
+        self.blocks[ret].pred.push(pred);
+        ret
     }
 
-    fn emit_instr(&mut self, instr: il::Instr) {
-        self.il.push(il::Item::Instr(instr));
+    fn emit(&mut self, block: usize, item: il::Item) {
+        self.blocks[block].il.push(item);
+    }
+
+    fn emit_instr(&mut self, block: usize, instr: il::Instr) {
+        self.blocks[block].il.push(il::Item::Instr(instr));
     }
 
     fn alloc_temp(&mut self) -> TempVar {
@@ -95,15 +112,16 @@ impl Translator {
         tmp
     }*/
 
-    fn lower_stmt_list<'a>(&mut self, list: &Vec<Box<ast::Stmt>>, scope: &mut Scope) {
+    fn lower_stmt_list<'a>(&mut self, list: &Vec<Box<ast::Stmt>>, parent_block: usize) {
         for stmt in list.iter() {
-            self.lower_stmt(&*stmt, scope);
+            self.lower_stmt(&*stmt, parent_block);
         }
     }
 
-    fn lower_let<'a>(&mut self, ident: &ast::Ident, expr: &ast::Expr, scope: &mut Scope) {
-        let var = self.lower_expr(expr, scope).unwrap();
-        if let il::Arg::Temp(idx) = var {
+    fn lower_let<'a>(&mut self, ident: &ast::Ident, expr: &ast::Expr, block: usize) {
+        let var = self.lower_expr(expr, block).unwrap();
+        // TODO
+        /*if let il::Arg::Temp(idx) = var {
             scope.put(&ident.0, TempVar(idx));
         } else {
             let res = self.alloc_temp();
@@ -115,33 +133,35 @@ impl Translator {
             });
 
             scope.put(&ident.0, res);
-        }
+        }*/
     }
 
-    fn lower_stmt<'a>(&mut self, stmt: &ast::Stmt, scope: &mut Scope) {
+    fn lower_stmt<'a>(&mut self, stmt: &ast::Stmt, parent_block: usize) {
+        let block = self.alloc_block(parent_block);
+
         match stmt {
             ast::Stmt::Expr(expr) => {
-                self.lower_expr(expr, scope);
+                self.lower_expr(expr, block);
             }
             ast::Stmt::Let(ident, expr) => {
-                self.lower_let(ident, expr, scope);
+                self.lower_let(ident, expr, block);
             }
             ast::Stmt::Var(ident, expr) => {
-                self.lower_let(ident, expr, scope);
+                self.lower_let(ident, expr, block);
             }
             ast::Stmt::Loop(expr) => {
                 let label = self.alloc_label();
-                self.emit(il::Item::Label(label));
-                self.lower_expr(expr, scope);
-                self.emit(il::Item::Jump(label));
+                //self.emit(il::Item::Label(label));
+                self.lower_expr(expr, block);
+                //self.emit(il::Item::Jump(label));
             }
             ast::Stmt::For(_ident, _from, _to, expr) => {
                 // TODO
-                self.lower_expr(expr, scope);
+                self.lower_expr(expr, block);
             }
             ast::Stmt::Assign(name, expr) => {
-                let var = self.lower_expr(expr, scope).unwrap();
-                match name {
+                let var = self.lower_expr(expr, block).unwrap();
+                /*match name {
                     ast::Name::Ident(ast::Ident(name)) => {
                         if let Some(prev_temp_idx) = scope.get(name) {
                             //let res = self.alloc_temp();
@@ -164,7 +184,7 @@ impl Translator {
                             res: il::Arg::Builtin(name.to_string()),
                         });
                     }
-                }
+                }*/
             }
         }
     }
@@ -175,7 +195,7 @@ impl Translator {
         }
     }*/
 
-    fn lower_if_else(
+    /*fn lower_if_else(
         &mut self,
         cond: &ast::Expr,
         tex: &ast::Expr,
@@ -233,21 +253,20 @@ impl Translator {
         self.lower_expr(tex, scope);
         self.emit(il::Item::Label(false_label));
         None
-    }
+    }*/
 
-    fn lower_expr<'a>(&mut self, expr: &ast::Expr, scope: &mut Scope) -> Option<il::Arg> {
+    fn lower_expr<'a>(&mut self, expr: &ast::Expr, parent_block: usize) -> Option<il::Arg> {
         match expr {
             ast::Expr::Block(stmt_list, res) => {
-                scope.push();
-                self.lower_stmt_list(stmt_list, scope);
+                let block = self.alloc_block(parent_block);
+                self.lower_stmt_list(stmt_list, block);
 
                 let ret = if let Some(res) = res {
-                    self.lower_expr(res, scope)
+                    self.lower_expr(res, block)
                 } else {
                     None
                 };
 
-                scope.pop();
                 ret
             }
             ast::Expr::Value(value) => {
@@ -257,7 +276,7 @@ impl Translator {
                     panic!("Empty type encountered while lowering to IL");
                 }
             }
-            ast::Expr::Name(name) => match name {
+            ast::Expr::Name(name) => /*match name {
                 ast::Name::Ident(ident) => {
                     if let Some(var) = scope.get(&ident.0) {
                         Some(il::Arg::Temp(var.0))
@@ -265,18 +284,19 @@ impl Translator {
                         panic!("Unrecognized identifier {}", ident.0);
                     }
                 }
-                ast::Name::Builtin(reg) => Some(il::Arg::Builtin(reg.0.clone())),
+                ast::Name::Builtin(reg) => Some(il::Arg::Builtin(reg.0.clone())),*/
+                { None  // TODO
             },
             ast::Expr::Call(_ident, _args) => {
 				Some(il::Arg::Builtin("TODO:call".to_string()))
 			},
             ast::Expr::Op(lhs, op, rhs) => {
-                let lhs = self.lower_expr(lhs, scope).unwrap();
-                let rhs = self.lower_expr(rhs, scope).unwrap();
+                let lhs = self.lower_expr(lhs, parent_block).unwrap();
+                let rhs = self.lower_expr(rhs, parent_block).unwrap();
 
                 let res = self.alloc_temp();
 
-                self.emit_instr(il::Instr {
+                self.emit_instr(parent_block, il::Instr {
                     op: match op {
                         ast::Opcode::Mul => il::Op::Mul,
                         ast::Opcode::Div => il::Op::Div,
@@ -291,11 +311,10 @@ impl Translator {
                 Some(il::Arg::Temp(res.0))
             }
             ast::Expr::Neg(expr) => {
-                let val = self.lower_expr(expr, scope).unwrap();
-
+                let val = self.lower_expr(expr, parent_block).unwrap();
                 let res = self.alloc_temp();
 
-                self.emit_instr(il::Instr {
+                self.emit_instr(parent_block, il::Instr {
                     op: il::Op::Sub,
                     args: (il::Arg::Const(0), val),
                     res: il::Arg::Temp(res.0),
@@ -304,12 +323,13 @@ impl Translator {
                 Some(il::Arg::Temp(res.0))
             }
             ast::Expr::If(cond, tex, fex) => {
-                if let Some(ref fex) = fex {
+                /*if let Some(ref fex) = fex {
                     self.lower_if_else(cond, tex, fex, scope)
                 } else {
                     self.lower_if(cond, tex, scope);
                     None
-                }
+                }*/
+                None        // TODO
             }
         }
     }
