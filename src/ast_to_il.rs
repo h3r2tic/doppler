@@ -59,6 +59,7 @@ struct Block {
     pub il: Vec<il::Item>,
     pub pred: Vec<usize>,
     pub succ: Vec<usize>,
+	pub vars: HashMap<String, TempVar>,
 }
 
 struct Translator {
@@ -78,6 +79,7 @@ impl Translator {
 
     fn alloc_block(&mut self, pred: usize) -> usize {
         let ret = self.blocks.len();
+		//println!("allocating new block {}; parent: {}", ret, pred);
         self.blocks.push(Block::default());
         self.blocks[pred].succ.push(ret);
         self.blocks[ret].pred.push(pred);
@@ -113,30 +115,33 @@ impl Translator {
     }*/
 
     fn lower_stmt_list<'a>(&mut self, list: &Vec<Box<ast::Stmt>>, parent_block: usize) {
+		let mut block = parent_block;
         for stmt in list.iter() {
-            self.lower_stmt(&*stmt, parent_block);
+            block = self.lower_stmt(&*stmt, block);
         }
     }
 
     fn lower_let<'a>(&mut self, ident: &ast::Ident, expr: &ast::Expr, block: usize) {
         let var = self.lower_expr(expr, block).unwrap();
-        // TODO
-        /*if let il::Arg::Temp(idx) = var {
-            scope.put(&ident.0, TempVar(idx));
+
+        if let il::Arg::Temp(idx) = var {
+			//println!("adding {} to block {}", ident.0, block);
+            self.blocks[block].vars.insert(ident.0.to_string(), TempVar(idx));
         } else {
             let res = self.alloc_temp();
 
-            self.emit_instr(il::Instr {
+            self.emit_instr(block, il::Instr {
                 op: il::Op::Copy,
                 args: (var, il::Arg::None),
                 res: il::Arg::Temp(res.0),
             });
 
-            scope.put(&ident.0, res);
-        }*/
+			//println!("adding {} to block {}", ident.0, block);
+            self.blocks[block].vars.insert(ident.0.to_string(), res);
+        }
     }
 
-    fn lower_stmt<'a>(&mut self, stmt: &ast::Stmt, parent_block: usize) {
+    fn lower_stmt<'a>(&mut self, stmt: &ast::Stmt, parent_block: usize) -> usize {
         let block = self.alloc_block(parent_block);
 
         match stmt {
@@ -187,6 +192,8 @@ impl Translator {
                 }*/
             }
         }
+
+		block
     }
 
     /*fn const_fold_expr_list<'a>(&mut self, list: &Vec<Box<ast::Expr>>, scope: &mut Scope) {
@@ -255,6 +262,34 @@ impl Translator {
         None
     }*/
 
+	fn resolve_var(&mut self, block: usize, name: &str) -> Option<TempVar> {
+		//println!("+resolve_var block:{} name:{}", block, name);
+
+		{
+			let b = &self.blocks[block];
+			if b.vars.contains_key(name) {
+				//println!("-block contains name; returning");
+				return Some(b.vars[name]);
+			}
+		}
+		
+		let pred_defs = self.blocks[block].pred.clone();
+		//println!("{} predecessors", pred_defs.len());
+
+		let pred_defs : Vec<TempVar> = pred_defs.iter().filter_map(|pred| {
+			self.resolve_var(*pred, name)
+		}).collect();
+
+		//println!("-{} names found", pred_defs.len());
+
+		if 1 == pred_defs.len() {
+			Some(pred_defs[0])
+		} else {
+			// TODO: phi
+			None
+		}
+	}
+
     fn lower_expr<'a>(&mut self, expr: &ast::Expr, parent_block: usize) -> Option<il::Arg> {
         match expr {
             ast::Expr::Block(stmt_list, res) => {
@@ -276,16 +311,15 @@ impl Translator {
                     panic!("Empty type encountered while lowering to IL");
                 }
             }
-            ast::Expr::Name(name) => /*match name {
+            ast::Expr::Name(name) => match name {
                 ast::Name::Ident(ident) => {
-                    if let Some(var) = scope.get(&ident.0) {
-                        Some(il::Arg::Temp(var.0))
-                    } else {
-                        panic!("Unrecognized identifier {}", ident.0);
-                    }
-                }
-                ast::Name::Builtin(reg) => Some(il::Arg::Builtin(reg.0.clone())),*/
-                { None  // TODO
+					if let Some(var) = self.resolve_var(parent_block, &ident.0) {
+						Some(il::Arg::Temp(var.0))
+					} else {
+						panic!("Unrecognized identifier {}", &ident.0);
+					}
+                },
+               	ast::Name::Builtin(reg) => Some(il::Arg::Builtin(reg.0.clone()))
             },
             ast::Expr::Call(_ident, _args) => {
 				Some(il::Arg::Builtin("TODO:call".to_string()))
