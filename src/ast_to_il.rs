@@ -40,7 +40,7 @@ impl Scope {
 pub fn ast_to_il(ast: &Vec<Box<ast::Stmt>>) -> Vec<il::Item> {
     let mut xlat = Translator::new();
 
-    xlat.lower_stmt_list(ast, 0);
+    xlat.lower_stmt_list(ast);
     //xlat.il
 
     for (i, block) in xlat.blocks.iter().enumerate() {
@@ -77,11 +77,25 @@ impl Translator {
         }
     }
 
-    fn alloc_block(&mut self, pred: usize) -> usize {
+    fn weave_block(&mut self, pred: Vec<usize>) -> usize {
         let ret = self.blocks.len();
 		//println!("allocating new block {}; parent: {}", ret, pred);
         self.blocks.push(Block::default());
-        self.blocks[pred].succ.push(ret);
+
+		for p in pred.iter() {
+        	self.blocks[*p].succ.push(ret);
+		}
+
+        self.blocks[ret].pred = pred;
+        ret
+    }
+
+    fn chain_block(&mut self) -> usize {
+        let ret = self.blocks.len();
+		let pred = ret - 1;
+		//println!("allocating new block {}; parent: {}", ret, pred);
+        self.blocks.push(Block::default());
+       	self.blocks[pred].succ.push(ret);
         self.blocks[ret].pred.push(pred);
         ret
     }
@@ -114,10 +128,9 @@ impl Translator {
         tmp
     }*/
 
-    fn lower_stmt_list<'a>(&mut self, list: &Vec<Box<ast::Stmt>>, parent_block: usize) {
-		let mut block = parent_block;
+    fn lower_stmt_list<'a>(&mut self, list: &Vec<Box<ast::Stmt>>) {
         for stmt in list.iter() {
-            block = self.lower_stmt(&*stmt, block);
+            self.lower_stmt(&*stmt);
         }
     }
 
@@ -141,8 +154,8 @@ impl Translator {
         }
     }
 
-    fn lower_stmt<'a>(&mut self, stmt: &ast::Stmt, parent_block: usize) -> usize {
-        let block = self.alloc_block(parent_block);
+    fn lower_stm(&mut self, stmt: &ast::Stmt) -> usize {
+        let block = self.chain_block();
 
         match stmt {
             ast::Stmt::Expr(expr) => {
@@ -202,17 +215,22 @@ impl Translator {
         }
     }*/
 
-    /*fn lower_if_else(
+    fn lower_if_else(
         &mut self,
         cond: &ast::Expr,
         tex: &ast::Expr,
         fex: &ast::Expr,
-        scope: &mut Scope,
+        parent_block: usize,
     ) -> Option<il::Arg> {
         let cond_var = self.lower_expr(cond, scope).unwrap();
         let result_reg = self.alloc_temp();
 
-        let merge_label = self.alloc_label();
+		let parent_block = self.blocks.len() - 1;
+		let true_block = self.weave_block(vec![parent_block]);
+		let false_block = self.weave_block(vec![parent_block]);
+		let merge_block = self.weave_block(vec![true_block, false_block]);
+
+        /*let merge_label = self.alloc_label();
         let true_label = self.alloc_label();
 
         self.emit(il::Item::Tjmp(cond_var, true_label));
@@ -244,23 +262,28 @@ impl Translator {
             Some(il::Arg::Temp(result_reg.0))
         } else {
             None
-        }
+        }*/
+
+	// TODO
+		None
     }
 
     fn lower_if(
         &mut self,
         cond: &ast::Expr,
         tex: &ast::Expr,
-        scope: &mut Scope,
+        parent_block: usize,
     ) -> Option<il::Arg> {
-        let cond_var = self.lower_expr(cond, scope).unwrap();
+        /*let cond_var = self.lower_expr(cond, scope).unwrap();
         let false_label = self.alloc_label();
 
         self.emit(il::Item::Fjmp(cond_var, false_label));
         self.lower_expr(tex, scope);
-        self.emit(il::Item::Label(false_label));
+        self.emit(il::Item::Label(false_label));*/
+
+		// TODO
         None
-    }*/
+    }
 
 	fn resolve_var(&mut self, block: usize, name: &str) -> Option<TempVar> {
 		//println!("+resolve_var block:{} name:{}", block, name);
@@ -290,11 +313,11 @@ impl Translator {
 		}
 	}
 
-    fn lower_expr<'a>(&mut self, expr: &ast::Expr, parent_block: usize) -> Option<il::Arg> {
+    fn lower_expr<'a>(&mut self, expr: &ast::Expr) -> Option<il::Arg> {
         match expr {
             ast::Expr::Block(stmt_list, res) => {
-                let block = self.alloc_block(parent_block);
-                self.lower_stmt_list(stmt_list, block);
+                let block = self.chain_block();
+                self.lower_stmt_list(stmt_list);
 
                 let ret = if let Some(res) = res {
                     self.lower_expr(res, block)
@@ -357,13 +380,12 @@ impl Translator {
                 Some(il::Arg::Temp(res.0))
             }
             ast::Expr::If(cond, tex, fex) => {
-                /*if let Some(ref fex) = fex {
-                    self.lower_if_else(cond, tex, fex, scope)
+                if let Some(ref fex) = fex {
+                    self.lower_if_else(cond, tex, fex, parent_block)
                 } else {
-                    self.lower_if(cond, tex, scope);
+                    self.lower_if(cond, tex, parent_block);
                     None
-                }*/
-                None        // TODO
+                }
             }
         }
     }
