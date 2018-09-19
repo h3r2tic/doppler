@@ -2,6 +2,7 @@ use ast;
 use il;
 
 use std::collections::HashMap;
+use std::default::Default;
 
 #[derive(Copy, Clone)]
 struct TempVar(i32);
@@ -44,7 +45,7 @@ pub fn ast_to_il(ast: &Vec<Box<ast::Stmt>>) -> Vec<il::Item> {
     //xlat.il
 
     for (i, block) in xlat.blocks.iter().enumerate() {
-        println!("block{}", i);
+        println!("block{}({})", i, block.name);
         for item in block.il.iter() {
             println!("{}", item);
         }
@@ -56,31 +57,43 @@ pub fn ast_to_il(ast: &Vec<Box<ast::Stmt>>) -> Vec<il::Item> {
 
 #[derive(Default)]
 struct Block {
+	pub name: String,
     pub il: Vec<il::Item>,
     pub pred: Vec<usize>,
     pub succ: Vec<usize>,
 	pub vars: HashMap<String, TempVar>,
 }
 
+impl Block {
+	fn new(name: &str) -> Block {
+		Block {
+			name: name.to_string(),
+			.. Default::default()
+		}
+	}
+}
+
 struct Translator {
     pub blocks: Vec<Block>,
     pub next_temp: i32,
     pub next_label: i32,
+	pub current_block: usize,
 }
 
 impl Translator {
     fn new() -> Translator {
         Translator {
-            blocks: vec![Block::default()],
+            blocks: vec![Block::new("main")],
             next_temp: 0,
             next_label: 0,
+			current_block: 0,
         }
     }
 
-    fn weave_block(&mut self, pred: Vec<usize>) -> usize {
+    fn weave_block(&mut self, name: &str, pred: Vec<usize>) -> usize {
         let ret = self.blocks.len();
 		//println!("allocating new block {}; parent: {}", ret, pred);
-        self.blocks.push(Block::default());
+        self.blocks.push(Block::new(name));
 
 		for p in pred.iter() {
         	self.blocks[*p].succ.push(ret);
@@ -90,22 +103,23 @@ impl Translator {
         ret
     }
 
-    fn chain_block(&mut self) -> usize {
+    fn chain_block(&mut self, name: &str) -> usize {
         let ret = self.blocks.len();
-		let pred = ret - 1;
+		let pred = self.current_block;
 		//println!("allocating new block {}; parent: {}", ret, pred);
-        self.blocks.push(Block::default());
+        self.blocks.push(Block::new(name));
        	self.blocks[pred].succ.push(ret);
         self.blocks[ret].pred.push(pred);
+		self.current_block = ret;
         ret
     }
 
-    fn emit(&mut self, block: usize, item: il::Item) {
-        self.blocks[block].il.push(item);
+    fn emit(&mut self, item: il::Item) {
+        self.blocks[self.current_block].il.push(item);
     }
 
-    fn emit_instr(&mut self, block: usize, instr: il::Instr) {
-        self.blocks[block].il.push(il::Item::Instr(instr));
+    fn emit_instr(&mut self, instr: il::Instr) {
+        self.blocks[self.current_block].il.push(il::Item::Instr(instr));
     }
 
     fn alloc_temp(&mut self) -> TempVar {
@@ -134,51 +148,51 @@ impl Translator {
         }
     }
 
-    fn lower_let<'a>(&mut self, ident: &ast::Ident, expr: &ast::Expr, block: usize) {
-        let var = self.lower_expr(expr, block).unwrap();
+    fn lower_let<'a>(&mut self, ident: &ast::Ident, expr: &ast::Expr) {
+        let var = self.lower_expr(expr).unwrap();
 
         if let il::Arg::Temp(idx) = var {
 			//println!("adding {} to block {}", ident.0, block);
-            self.blocks[block].vars.insert(ident.0.to_string(), TempVar(idx));
+            self.blocks[self.current_block].vars.insert(ident.0.to_string(), TempVar(idx));
         } else {
             let res = self.alloc_temp();
 
-            self.emit_instr(block, il::Instr {
+            self.emit_instr(il::Instr {
                 op: il::Op::Copy,
                 args: (var, il::Arg::None),
                 res: il::Arg::Temp(res.0),
             });
 
 			//println!("adding {} to block {}", ident.0, block);
-            self.blocks[block].vars.insert(ident.0.to_string(), res);
+            self.blocks[self.current_block].vars.insert(ident.0.to_string(), res);
         }
     }
 
-    fn lower_stm(&mut self, stmt: &ast::Stmt) -> usize {
-        let block = self.chain_block();
+    fn lower_stmt(&mut self, stmt: &ast::Stmt) {
+        self.chain_block("stmt");
 
         match stmt {
             ast::Stmt::Expr(expr) => {
-                self.lower_expr(expr, block);
+                self.lower_expr(expr);
             }
             ast::Stmt::Let(ident, expr) => {
-                self.lower_let(ident, expr, block);
+                self.lower_let(ident, expr);
             }
             ast::Stmt::Var(ident, expr) => {
-                self.lower_let(ident, expr, block);
+                self.lower_let(ident, expr);
             }
             ast::Stmt::Loop(expr) => {
                 let label = self.alloc_label();
                 //self.emit(il::Item::Label(label));
-                self.lower_expr(expr, block);
+                self.lower_expr(expr);
                 //self.emit(il::Item::Jump(label));
             }
             ast::Stmt::For(_ident, _from, _to, expr) => {
                 // TODO
-                self.lower_expr(expr, block);
+                self.lower_expr(expr);
             }
             ast::Stmt::Assign(name, expr) => {
-                let var = self.lower_expr(expr, block).unwrap();
+                let var = self.lower_expr(expr).unwrap();
                 /*match name {
                     ast::Name::Ident(ast::Ident(name)) => {
                         if let Some(prev_temp_idx) = scope.get(name) {
@@ -205,8 +219,6 @@ impl Translator {
                 }*/
             }
         }
-
-		block
     }
 
     /*fn const_fold_expr_list<'a>(&mut self, list: &Vec<Box<ast::Expr>>, scope: &mut Scope) {
@@ -219,23 +231,20 @@ impl Translator {
         &mut self,
         cond: &ast::Expr,
         tex: &ast::Expr,
-        fex: &ast::Expr,
-        parent_block: usize,
+        fex: &ast::Expr
     ) -> Option<il::Arg> {
-        let cond_var = self.lower_expr(cond, scope).unwrap();
+        let cond_var = self.lower_expr(cond).unwrap();
         let result_reg = self.alloc_temp();
 
-		let parent_block = self.blocks.len() - 1;
-		let true_block = self.weave_block(vec![parent_block]);
-		let false_block = self.weave_block(vec![parent_block]);
-		let merge_block = self.weave_block(vec![true_block, false_block]);
+		let parent_block = self.current_block;
+		let true_block = self.weave_block("true", vec![parent_block]);
+		let false_block = self.weave_block("false", vec![parent_block]);
+		let merge_block = self.weave_block("merge", vec![true_block, false_block]);
 
-        /*let merge_label = self.alloc_label();
-        let true_label = self.alloc_label();
+        //self.emit(parent_block, il::Item::Tjmp(cond_var, true_label));
 
-        self.emit(il::Item::Tjmp(cond_var, true_label));
-
-        let fex = self.lower_expr(fex, scope);
+		self.current_block = false_block;
+        let fex = self.lower_expr(fex);
         if let Some(ref ret) = fex {
             self.emit_instr(il::Instr {
                 op: il::Op::Copy,
@@ -243,11 +252,12 @@ impl Translator {
                 res: il::Arg::Temp(result_reg.0),
             });
         }
-        self.emit(il::Item::Jump(merge_label));
 
-        self.emit(il::Item::Label(true_label));
+        //self.emit(il::Item::Jump(merge_label));
+        //self.emit(il::Item::Label(true_label));
 
-        let tex = self.lower_expr(tex, scope);
+		self.current_block = true_block;
+        let tex = self.lower_expr(tex);
         if let Some(ref ret) = tex {
             self.emit_instr(il::Instr {
                 op: il::Op::Copy,
@@ -256,23 +266,20 @@ impl Translator {
             });
         }
 
-        self.emit(il::Item::Label(merge_label));
+		self.current_block = merge_block;
+        //self.emit(il::Item::Label(merge_label));
 
         if tex.is_some() {
             Some(il::Arg::Temp(result_reg.0))
         } else {
             None
-        }*/
-
-	// TODO
-		None
+        }
     }
 
     fn lower_if(
         &mut self,
         cond: &ast::Expr,
-        tex: &ast::Expr,
-        parent_block: usize,
+        tex: &ast::Expr
     ) -> Option<il::Arg> {
         /*let cond_var = self.lower_expr(cond, scope).unwrap();
         let false_label = self.alloc_label();
@@ -314,13 +321,15 @@ impl Translator {
 	}
 
     fn lower_expr<'a>(&mut self, expr: &ast::Expr) -> Option<il::Arg> {
+		let parent_block = self.current_block;
+		
         match expr {
             ast::Expr::Block(stmt_list, res) => {
-                let block = self.chain_block();
+                let block = self.chain_block("anon");
                 self.lower_stmt_list(stmt_list);
 
                 let ret = if let Some(res) = res {
-                    self.lower_expr(res, block)
+                    self.lower_expr(res)
                 } else {
                     None
                 };
@@ -348,12 +357,12 @@ impl Translator {
 				Some(il::Arg::Builtin("TODO:call".to_string()))
 			},
             ast::Expr::Op(lhs, op, rhs) => {
-                let lhs = self.lower_expr(lhs, parent_block).unwrap();
-                let rhs = self.lower_expr(rhs, parent_block).unwrap();
+                let lhs = self.lower_expr(lhs).unwrap();
+                let rhs = self.lower_expr(rhs).unwrap();
 
                 let res = self.alloc_temp();
 
-                self.emit_instr(parent_block, il::Instr {
+                self.emit_instr(il::Instr {
                     op: match op {
                         ast::Opcode::Mul => il::Op::Mul,
                         ast::Opcode::Div => il::Op::Div,
@@ -368,10 +377,10 @@ impl Translator {
                 Some(il::Arg::Temp(res.0))
             }
             ast::Expr::Neg(expr) => {
-                let val = self.lower_expr(expr, parent_block).unwrap();
+                let val = self.lower_expr(expr).unwrap();
                 let res = self.alloc_temp();
 
-                self.emit_instr(parent_block, il::Instr {
+                self.emit_instr(il::Instr {
                     op: il::Op::Sub,
                     args: (il::Arg::Const(0), val),
                     res: il::Arg::Temp(res.0),
@@ -381,9 +390,9 @@ impl Translator {
             }
             ast::Expr::If(cond, tex, fex) => {
                 if let Some(ref fex) = fex {
-                    self.lower_if_else(cond, tex, fex, parent_block)
+                    self.lower_if_else(cond, tex, fex)
                 } else {
-                    self.lower_if(cond, tex, parent_block);
+                    self.lower_if(cond, tex);
                     None
                 }
             }
