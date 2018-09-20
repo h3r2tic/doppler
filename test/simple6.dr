@@ -6,4 +6,4 @@ let y = if x {
     2
 };
 
-let z = y;
+let mut z = y + 100;

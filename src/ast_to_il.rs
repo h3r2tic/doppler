@@ -4,6 +4,9 @@ use il;
 use std::collections::HashMap;
 use std::default::Default;
 
+use std::fs::File;
+use std::io::{BufWriter, Write};
+
 #[derive(Copy, Clone)]
 struct TempVar(i32);
 
@@ -42,14 +45,31 @@ pub fn ast_to_il(ast: &Vec<Box<ast::Stmt>>) -> Vec<il::Item> {
     let mut xlat = Translator::new();
 
     xlat.lower_stmt_list(ast);
-    //xlat.il
+
+	let mut dot: String = "digraph G {\nnode [fontsize=10 fontname=\"verdana\"];\n".to_owned();
+
+	dot.push_str("{\n");
+    for (i, block) in xlat.blocks.iter().enumerate() {
+		let mut il: String = Default::default();
+        for item in block.il.iter() {
+            il.push_str(&format!("<br/>{}", item));
+        }
+
+		dot.push_str(&format!("block{} [shape=box label=<{}:<b>{}</b>{}>]\n", i, i, block.name, il));
+    }
+	dot.push_str("}\n");
 
     for (i, block) in xlat.blocks.iter().enumerate() {
-        println!("block{}({})", i, block.name);
-        for item in block.il.iter() {
-            println!("{}", item);
-        }
+		for succ in block.succ.iter() {
+			dot.push_str(&format!("block{} -> block{}\n", i, succ));
+		}
     }
+
+	dot.push_str("}");
+
+	let mut f = File::create("blocks.dot").expect("Unable to create file");
+	f.write_all(dot.as_bytes());
+	f.flush();
 
     // TODO
     vec![]
@@ -239,9 +259,11 @@ impl Translator {
 		let parent_block = self.current_block;
 		let true_block = self.weave_block("true", vec![parent_block]);
 		let false_block = self.weave_block("false", vec![parent_block]);
-		let merge_block = self.weave_block("merge", vec![true_block, false_block]);
+		let merge_block = self.weave_block("merge", vec![]);
 
-        //self.emit(parent_block, il::Item::Tjmp(cond_var, true_label));
+		self.current_block = parent_block;
+        self.emit(il::Item::Tjmp(cond_var, il::JumpTarget::Block(true_block)));
+		self.emit(il::Item::Jump(il::JumpTarget::Block(false_block)));
 
 		self.current_block = false_block;
         let fex = self.lower_expr(fex);
@@ -252,9 +274,9 @@ impl Translator {
                 res: il::Arg::Temp(result_reg.0),
             });
         }
-
-        //self.emit(il::Item::Jump(merge_label));
-        //self.emit(il::Item::Label(true_label));
+        self.emit(il::Item::Jump(il::JumpTarget::Block(merge_block)));
+		self.blocks[self.current_block].succ.push(merge_block);
+		self.blocks[merge_block].pred.push(self.current_block);
 
 		self.current_block = true_block;
         let tex = self.lower_expr(tex);
@@ -265,9 +287,11 @@ impl Translator {
                 res: il::Arg::Temp(result_reg.0),
             });
         }
+		self.emit(il::Item::Jump(il::JumpTarget::Block(merge_block)));
+		self.blocks[self.current_block].succ.push(merge_block);
+		self.blocks[merge_block].pred.push(self.current_block);
 
 		self.current_block = merge_block;
-        //self.emit(il::Item::Label(merge_label));
 
         if tex.is_some() {
             Some(il::Arg::Temp(result_reg.0))

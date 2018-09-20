@@ -63,7 +63,7 @@ impl fmt::Display for Instr {
 
 #[derive(Clone, Debug)]
 pub enum JumpTarget {
-    Block(i32),
+    Block(usize),
     Label(i32),
 }
 

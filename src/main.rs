@@ -7,13 +7,16 @@ mod ast;
 mod ast_to_il;
 mod const_fold;
 mod il;
+mod resolve_names;
 
 use ast_to_il::ast_to_il;
 use const_fold::const_fold_program;
+use resolve_names::resolve_names;
 
 use regex::Regex;
 use std::fs::File;
 use std::io::prelude::*;
+
 
 fn main() {
     let mut f = File::open("test/simple6.dr").expect("file not found");
@@ -31,12 +34,13 @@ fn main() {
     let mut ast = grammar::MainParser::new().parse(&contents).unwrap();
     //println!("{:?}", ast);
     const_fold_program(&mut ast);
+	resolve_names(&mut ast);
     //println!("\nconst folded:\n");
     println!("ast: {:?}", ast);
-    println!("\nil:");
+    //println!("\nil:");
 
-    let il = ast_to_il(&ast);
-    for item in il.iter() {
+    /*let il = */ast_to_il(&ast);
+    /*for item in il.iter() {
         println!("{}", item);
-    }
+    }*/
 }
